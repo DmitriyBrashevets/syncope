@@ -21,6 +21,8 @@ package org.apache.syncope.core.persistence.api.dao;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
+import java.util.Set;
+
 import org.apache.syncope.core.persistence.api.dao.search.SearchCond;
 import org.apache.syncope.core.persistence.api.entity.Any;
 import org.apache.syncope.core.persistence.api.entity.resource.ExternalResource;
@@ -32,6 +34,8 @@ public interface AnyDAO<A extends Any<?>> extends DAO<A> {
     int DEFAULT_PAGE_SIZE = 500;
 
     String findKey(String name);
+
+    Collection<A> findByKeys(Set<String> keys);
 
     Date findLastChange(String key);
 

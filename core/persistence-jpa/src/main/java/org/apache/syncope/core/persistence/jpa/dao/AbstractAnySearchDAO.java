@@ -22,13 +22,19 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+
 import javax.persistence.Entity;
 import javax.validation.ValidationException;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
+
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.ListUtils;
 import org.apache.commons.collections4.Predicate;
@@ -319,26 +325,44 @@ public abstract class AbstractAnySearchDAO extends AbstractDAO<Any<?>> implement
     }
 
     protected <T extends Any<?>> List<T> buildResult(final List<Object> raw, final AnyTypeKind kind) {
-        List<T> result = new ArrayList<>();
+        LinkedHashSet<String> orderedAnyKeys = extractOrderedAnyKeys(raw);
+        List<T> nonOrderedAnyTOs = findAnyTOs(kind, orderedAnyKeys);
 
+        return orderAnyTOsByOrderedKeys(nonOrderedAnyTOs, orderedAnyKeys);
+    }
+
+    private LinkedHashSet<String> extractOrderedAnyKeys(List<Object> raw) {
+        LinkedHashSet<String> orderedAnyKeys = new LinkedHashSet<>();
         for (Object anyKey : raw) {
             String actualKey = anyKey instanceof Object[]
                     ? (String) ((Object[]) anyKey)[0]
                     : ((String) anyKey);
-
-            @SuppressWarnings("unchecked")
-            T any = kind == AnyTypeKind.USER
-                    ? (T) userDAO.find(actualKey)
-                    : kind == AnyTypeKind.GROUP
-                            ? (T) groupDAO.find(actualKey)
-                            : (T) anyObjectDAO.find(actualKey);
-            if (any == null) {
-                LOG.error("Could not find {} with id {}, even if returned by native query", kind, actualKey);
-            } else if (!result.contains(any)) {
-                result.add(any);
-            }
+            orderedAnyKeys.add(actualKey);
         }
+        return orderedAnyKeys;
+    }
 
+    @SuppressWarnings("unchecked")
+    private <T extends Any<?>> List<T> findAnyTOs(AnyTypeKind kind, LinkedHashSet<String> orderedAnyKeys) {
+        if (AnyTypeKind.USER == kind) {
+            return new ArrayList<>((Collection<T>)userDAO.findByKeys(orderedAnyKeys));
+        }
+        if (AnyTypeKind.GROUP == kind) {
+            return new ArrayList<>((Collection<T>)groupDAO.findByKeys(orderedAnyKeys));
+        }
+        return new ArrayList<>((Collection<T>)anyObjectDAO.findByKeys(orderedAnyKeys));
+    }
+
+    private <T extends Any<?>> List<T> orderAnyTOsByOrderedKeys(List<T> nonOrderedAnyTOs,
+            LinkedHashSet<String> orderedAnyKeys) {
+        Map<String, T> anyMap = new HashMap<>();
+        for (T any : nonOrderedAnyTOs) {
+            anyMap.put(any.getKey(), any);
+        }
+        List<T> result = new ArrayList<>();
+        for (String key : orderedAnyKeys) {
+            result.add(anyMap.get(key));
+        }
         return result;
     }
 

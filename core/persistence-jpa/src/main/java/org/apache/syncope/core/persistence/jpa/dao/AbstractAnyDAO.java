@@ -30,13 +30,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+
+import javax.persistence.EntityManager;
 import javax.persistence.NoResultException;
 import javax.persistence.Query;
 import javax.persistence.TemporalType;
+
 import org.apache.commons.jexl3.parser.Parser;
 import org.apache.commons.jexl3.parser.ParserConstants;
 import org.apache.commons.jexl3.parser.Token;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.openjpa.persistence.EntityManagerImpl;
 import org.apache.syncope.core.persistence.api.dao.AllowedSchemas;
 import org.apache.syncope.core.persistence.api.dao.AnyDAO;
 import org.apache.syncope.core.persistence.api.dao.DerSchemaDAO;
@@ -156,6 +160,48 @@ public abstract class AbstractAnyDAO<A extends Any<?>> extends AbstractDAO<A> im
     }
 
     protected abstract void securityChecks(A any);
+
+    @Transactional(readOnly = true)
+    @Override
+    public Collection<A> findByKeys(Set<String> keys) {
+        validateKeys(keys);
+
+        Class<A> entityClass = anyUtils().anyClass();
+        EntityManager entityManager = entityManager();
+
+        Collection<A> foundAnys = ((EntityManagerImpl) entityManager).findAll(entityClass, keys);
+
+        Map<String, Any<?>> anysMap = new HashMap<>();
+        for (Any<?> foundAny : foundAnys) {
+            anysMap.put(foundAny.getKey(), foundAny);
+        }
+
+        validateAllAnysPresent(keys, anysMap);
+
+        for (A any : foundAnys) {
+            securityChecks(any);
+        }
+
+        return foundAnys;
+    }
+
+    private void validateAllAnysPresent(Set<String> keys, Map<String, Any<?>> anysMap) {
+        for (String key : keys) {
+            Any<?> any = anysMap.get(key);
+            if (any == null) {
+                throw new NotFoundException(StringUtils.substringBefore(
+                        StringUtils.substringAfter(getClass().getSimpleName(), "JPA"), "DAO") + " " + key);
+            }
+        }
+    }
+
+    private void validateKeys(Set<String> keys) {
+        for (String key : keys) {
+            if (key == null) {
+                throw new NotFoundException("Null key");
+            }
+        }
+    }
 
     @Transactional(readOnly = true)
     @Override
