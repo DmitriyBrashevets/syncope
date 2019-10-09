@@ -31,16 +31,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-import javax.persistence.EntityManager;
 import javax.persistence.NoResultException;
 import javax.persistence.Query;
 import javax.persistence.TemporalType;
+import javax.persistence.TypedQuery;
 
 import org.apache.commons.jexl3.parser.Parser;
 import org.apache.commons.jexl3.parser.ParserConstants;
 import org.apache.commons.jexl3.parser.Token;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.openjpa.persistence.EntityManagerImpl;
 import org.apache.syncope.core.persistence.api.dao.AllowedSchemas;
 import org.apache.syncope.core.persistence.api.dao.AnyDAO;
 import org.apache.syncope.core.persistence.api.dao.DerSchemaDAO;
@@ -167,18 +166,15 @@ public abstract class AbstractAnyDAO<A extends Any<?>> extends AbstractDAO<A> im
         validateKeys(keys);
 
         Class<A> entityClass = anyUtils().anyClass();
-        EntityManager entityManager = entityManager();
+        TypedQuery<A> query = entityManager().createQuery(
+                "SELECT e FROM " + entityClass.getSimpleName()
+                        + " e WHERE e.id IN (:keys)",
+                entityClass);
+        query.setParameter("keys", keys);
+        List<A> foundAnys = query.getResultList();
 
-        Collection<A> foundAnys = ((EntityManagerImpl) entityManager).findAll(entityClass, keys);
+        validateAllAnysPresent(keys, foundAnys);
 
-        Map<String, Any<?>> anysMap = new HashMap<>();
-        for (Any<?> foundAny : foundAnys) {
-            anysMap.put(foundAny.getKey(), foundAny);
-        }
-
-        validateAllAnysPresent(keys, anysMap);
-
-        // TODO: adopt to multiple keys
         for (A any : foundAnys) {
             securityChecks(any);
         }
@@ -186,7 +182,12 @@ public abstract class AbstractAnyDAO<A extends Any<?>> extends AbstractDAO<A> im
         return foundAnys;
     }
 
-    private void validateAllAnysPresent(Set<String> keys, Map<String, Any<?>> anysMap) {
+    private void validateAllAnysPresent(Set<String> keys, List<A> foundAnys) {
+        Map<String, Any<?>> anysMap = new HashMap<>();
+        for (Any<?> foundAny : foundAnys) {
+            anysMap.put(foundAny.getKey(), foundAny);
+        }
+
         for (String key : keys) {
             Any<?> any = anysMap.get(key);
             if (any == null) {
