@@ -178,6 +178,7 @@ public abstract class AbstractAnyDAO<A extends Any<?>> extends AbstractDAO<A> im
 
         validateAllAnysPresent(keys, anysMap);
 
+        // TODO: adopt to multiple keys
         for (A any : foundAnys) {
             securityChecks(any);
         }
